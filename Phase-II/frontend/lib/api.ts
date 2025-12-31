@@ -8,6 +8,7 @@ import type {
   LoginRequest,
   AuthResponse,
   TaskCreate,
+  TaskUpdate,
   Task,
   TaskListResponse,
   APIError
@@ -159,8 +160,9 @@ class APIClient {
   /**
    * Get all tasks for the authenticated user
    */
-  async listTasks(): Promise<TaskListResponse> {
-    return this.request<TaskListResponse>('/api/tasks');
+  async listTasks(filter?: 'all' | 'pending' | 'completed'): Promise<TaskListResponse> {
+    const queryParam = filter ? `?filter=${filter}` : '';
+    return this.request<TaskListResponse>(`/api/tasks${queryParam}`);
   }
 
   /**
@@ -168,6 +170,37 @@ class APIClient {
    */
   async getTask(id: number): Promise<Task> {
     return this.request<Task>(`/api/tasks/${id}`);
+  }
+
+  /**
+   * Update an existing task
+   */
+  async updateTask(id: number, data: TaskUpdate): Promise<Task> {
+    return this.request<Task>(`/api/tasks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Toggle task completion status
+   */
+  async toggleComplete(id: number): Promise<Task> {
+    return this.request<Task>(`/api/tasks/${id}/complete`, {
+      method: 'PATCH',
+    });
+  }
+
+  /**
+   * Delete a task
+   */
+  async deleteTask(id: number): Promise<void> {
+    await fetch(`${this.baseURL}/api/tasks/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${this.getToken()}`,
+      },
+    });
   }
 }
 

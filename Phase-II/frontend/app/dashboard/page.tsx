@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import type { TaskListResponse } from '@/lib/types';
 import TaskForm from '@/components/task/TaskForm';
+import TaskItem from '@/components/task/TaskItem';
+import TaskFilters from '@/components/task/TaskFilters';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -12,10 +14,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [user, setUser] = useState<any>(null);
+  const [currentFilter, setCurrentFilter] = useState<'all' | 'pending' | 'completed'>('all');
 
-  const loadTasks = async () => {
+  const loadTasks = async (filter?: 'all' | 'pending' | 'completed') => {
     try {
-      const data = await api.listTasks();
+      const filterToUse = filter || currentFilter;
+      const data = await api.listTasks(filterToUse);
       setTaskData(data);
       setError('');
     } catch (err) {
@@ -23,6 +27,11 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleFilterChange = (filter: 'all' | 'pending' | 'completed') => {
+    setCurrentFilter(filter);
+    loadTasks(filter);
   };
 
   useEffect(() => {
@@ -124,41 +133,21 @@ export default function DashboardPage() {
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-bold mb-4">Your Tasks</h2>
 
+            <TaskFilters currentFilter={currentFilter} onFilterChange={handleFilterChange} />
+
             {taskData && taskData.tasks.length === 0 ? (
               <div className="text-center py-12 text-gray-500">
                 <p className="text-lg font-medium">No tasks yet!</p>
-                <p className="text-sm mt-2">Create your first task to get started</p>
+                <p className="text-sm mt-2">
+                  {currentFilter === 'all'
+                    ? 'Create your first task to get started'
+                    : `No ${currentFilter} tasks found`}
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
                 {taskData?.tasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className={`font-medium ${task.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
-                          {task.title}
-                        </h3>
-                        {task.description && (
-                          <p className="text-sm text-gray-600 mt-1">{task.description}</p>
-                        )}
-                        <p className="text-xs text-gray-400 mt-2">
-                          Created: {new Date(task.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <span
-                        className={`px-2 py-1 text-xs font-semibold rounded ${
-                          task.completed
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-blue-100 text-blue-800'
-                        }`}
-                      >
-                        {task.completed ? 'Completed' : 'Pending'}
-                      </span>
-                    </div>
-                  </div>
+                  <TaskItem key={task.id} task={task} onTaskUpdated={() => loadTasks()} />
                 ))}
               </div>
             )}
