@@ -31,15 +31,15 @@ def migrate():
                 ADD COLUMN name VARCHAR(100)
             """))
             conn.commit()
-            print("✓ Successfully added 'name' column")
+            print("[SUCCESS] Successfully added 'name' column")
         else:
-            print("✓ Column 'name' already exists")
+            print("[INFO] Column 'name' already exists")
 
 if __name__ == "__main__":
     try:
         migrate()
-        print("\n✓ Migration completed successfully!")
+        print("\n[SUCCESS] Migration completed successfully!")
     except Exception as e:
-        print(f"\n✗ Migration failed: {e}")
+        print(f"\n[ERROR] Migration failed: {e}")
         import traceback
         traceback.print_exc()
