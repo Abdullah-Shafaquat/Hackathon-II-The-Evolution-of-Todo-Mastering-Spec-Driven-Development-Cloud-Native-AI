@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from app.config import settings
 from app.database import create_db_and_tables
 from app.middleware.cors import configure_cors
+from app.routes import auth_router, tasks_router
 
 
 @asynccontextmanager
@@ -42,6 +43,10 @@ app = FastAPI(
 # Configure CORS middleware
 configure_cors(app)
 
+# Register API routes
+app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(tasks_router, prefix="/api/tasks", tags=["Tasks"])
+
 
 @app.get("/health")
 async def health_check():
@@ -70,10 +75,9 @@ async def root():
         "message": "Phase II Todo App API",
         "version": settings.APP_VERSION,
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
+        "endpoints": {
+            "auth": "/api/auth (signup, login)",
+            "tasks": "/api/tasks (CRUD operations)"
+        }
     }
-
-
-# Future route registrations will be added here
-# app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
-# app.include_router(tasks_router, prefix="/api/tasks", tags=["Tasks"])
