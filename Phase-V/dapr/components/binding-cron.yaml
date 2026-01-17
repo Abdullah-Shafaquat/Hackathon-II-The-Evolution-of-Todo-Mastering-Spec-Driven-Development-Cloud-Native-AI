@@ -1,0 +1,19 @@
+# T-V-06: Dapr Cron Binding for Scheduled Tasks
+# From: speckit.plan - Dapr Bindings for scheduled jobs
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: recurring-scheduler
+  namespace: default
+spec:
+  type: bindings.cron
+  version: v1
+  metadata:
+    # Run every minute to check for recurring tasks
+    - name: schedule
+      value: "@every 1m"
+    # Direction: input binding (triggers the app)
+    - name: direction
+      value: "input"
+scopes:
+  - recurring-service

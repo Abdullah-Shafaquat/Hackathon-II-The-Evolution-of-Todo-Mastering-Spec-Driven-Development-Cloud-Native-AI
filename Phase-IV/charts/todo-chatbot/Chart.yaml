@@ -1,0 +1,38 @@
+apiVersion: v2
+name: todo-chatbot
+description: Phase IV Todo AI Chatbot - Full-stack Kubernetes deployment
+
+# Chart type (application or library)
+type: application
+
+# Chart version - increment on changes to chart
+version: 1.0.0
+
+# Application version - matches Phase IV
+appVersion: "4.0.0"
+
+# Keywords for chart search
+keywords:
+  - todo
+  - chatbot
+  - ai
+  - fastapi
+  - nextjs
+  - gemini
+
+# Home URL
+home: https://github.com/your-org/todo-chatbot
+
+# Source repositories
+sources:
+  - https://github.com/your-org/todo-chatbot
+
+# Maintainers
+maintainers:
+  - name: Phase IV Developer
+    email: developer@example.com
+
+# Annotations for additional metadata
+annotations:
+  category: AI/ML
+  artifacthub.io/license: MIT

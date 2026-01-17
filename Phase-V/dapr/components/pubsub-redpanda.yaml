@@ -1,0 +1,36 @@
+# T-V-05: Dapr Pub/Sub Component for Redpanda (Kafka-compatible)
+# From: speckit.plan - Event-Driven Architecture
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: pubsub-kafka
+  namespace: default
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+    # Broker configuration
+    - name: brokers
+      value: "redpanda:9092"
+    # Consumer group for this application
+    - name: consumerGroup
+      value: "todo-app-group"
+    # Authentication (none for local development)
+    - name: authType
+      value: "none"
+    # Message configuration
+    - name: maxMessageBytes
+      value: "1048576"  # 1MB
+    # Consumer configuration
+    - name: consumeRetryInterval
+      value: "100ms"
+    - name: version
+      value: "2.0.0"
+    # Initial offset for new consumer groups
+    - name: initialOffset
+      value: "oldest"
+scopes:
+  - backend
+  - notification-service
+  - recurring-service
+  - audit-service

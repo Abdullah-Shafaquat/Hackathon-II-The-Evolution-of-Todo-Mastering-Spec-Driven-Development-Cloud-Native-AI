@@ -1,0 +1,340 @@
+# Phase V: Docker Compose for Event-Driven Architecture
+# Includes: Redpanda (Kafka), Redis, Dapr, Backend, Frontend
+
+version: '3.8'
+
+services:
+  # =============================================================================
+  # INFRASTRUCTURE SERVICES
+  # =============================================================================
+
+  # Redpanda - Kafka-compatible message broker (lighter than Apache Kafka)
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.3.5
+    container_name: redpanda
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:18082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr redpanda:33145
+      - --advertise-rpc-addr redpanda:33145
+      - --smp 1
+      - --memory 1G
+      - --mode dev-container
+      - --default-log-level=warn
+    ports:
+      - "19092:19092"   # Kafka external
+      - "18082:18082"   # Pandaproxy external
+      - "18081:18081"   # Schema registry external
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - todo-network
+
+  # Redpanda Console - UI for Kafka management
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v2.4.3
+    container_name: redpanda-console
+    ports:
+      - "8080:8080"
+    environment:
+      - KAFKA_BROKERS=redpanda:9092
+      - KAFKA_SCHEMAREGISTRY_ENABLED=true
+      - KAFKA_SCHEMAREGISTRY_URLS=http://redpanda:8081
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    networks:
+      - todo-network
+
+  # Redis - State store for Dapr
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - todo-network
+
+  # Dapr Placement Service - For actor support
+  placement:
+    image: daprio/dapr:1.12.4
+    container_name: dapr-placement
+    command: ["./placement", "-port", "50006"]
+    ports:
+      - "50006:50006"
+    networks:
+      - todo-network
+
+  # =============================================================================
+  # APPLICATION SERVICES WITH DAPR SIDECARS
+  # =============================================================================
+
+  # Backend API with Dapr Sidecar
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: todo-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - APP_NAME=Phase V Todo AI Assistant
+      - APP_VERSION=5.0.0
+      - FRONTEND_URL=http://localhost:3000
+      - DATABASE_URL=${DATABASE_URL}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=10080
+      - REFRESH_TOKEN_EXPIRE_MINUTES=43200
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=gemini-1.5-flash
+      - MAX_CONVERSATION_MESSAGES=50
+      # Dapr configuration
+      - DAPR_HTTP_PORT=3500
+      - DAPR_GRPC_PORT=50001
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - todo-network
+
+  # Dapr Sidecar for Backend
+  backend-dapr:
+    image: daprio/daprd:1.12.4
+    container_name: backend-dapr
+    command: [
+      "./daprd",
+      "-app-id", "backend",
+      "-app-port", "8000",
+      "-dapr-http-port", "3500",
+      "-dapr-grpc-port", "50001",
+      "-placement-host-address", "placement:50006",
+      "-resources-path", "/dapr/components",
+      "-log-level", "info"
+    ]
+    volumes:
+      - ./dapr/components:/dapr/components:ro
+      - ./dapr/secrets:/dapr/secrets:ro
+    depends_on:
+      - backend
+      - placement
+      - redpanda
+      - redis
+    network_mode: "service:backend"
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:8000
+    container_name: todo-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8000
+      - NODE_ENV=production
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - todo-network
+
+  # =============================================================================
+  # EVENT-DRIVEN MICROSERVICES
+  # =============================================================================
+
+  # T-V-08: Notification Service
+  notification-service:
+    build:
+      context: ./services/notification
+      dockerfile: Dockerfile
+    container_name: notification-service
+    ports:
+      - "8001:8001"
+    environment:
+      - DAPR_HTTP_PORT=3500
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - todo-network
+
+  notification-service-dapr:
+    image: daprio/daprd:1.12.4
+    container_name: notification-dapr
+    command: [
+      "./daprd",
+      "-app-id", "notification-service",
+      "-app-port", "8001",
+      "-dapr-http-port", "3500",
+      "-dapr-grpc-port", "50001",
+      "-placement-host-address", "placement:50006",
+      "-resources-path", "/dapr/components",
+      "-log-level", "info"
+    ]
+    volumes:
+      - ./dapr/components:/dapr/components:ro
+      - ./dapr/secrets:/dapr/secrets:ro
+    depends_on:
+      - notification-service
+      - placement
+      - redpanda
+    network_mode: "service:notification-service"
+
+  # T-V-09: Recurring Task Service
+  recurring-service:
+    build:
+      context: ./services/recurring
+      dockerfile: Dockerfile
+    container_name: recurring-service
+    ports:
+      - "8002:8002"
+    environment:
+      - DAPR_HTTP_PORT=3500
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - todo-network
+
+  recurring-service-dapr:
+    image: daprio/daprd:1.12.4
+    container_name: recurring-dapr
+    command: [
+      "./daprd",
+      "-app-id", "recurring-service",
+      "-app-port", "8002",
+      "-dapr-http-port", "3500",
+      "-dapr-grpc-port", "50001",
+      "-placement-host-address", "placement:50006",
+      "-resources-path", "/dapr/components",
+      "-log-level", "info"
+    ]
+    volumes:
+      - ./dapr/components:/dapr/components:ro
+      - ./dapr/secrets:/dapr/secrets:ro
+    depends_on:
+      - recurring-service
+      - placement
+      - redpanda
+    network_mode: "service:recurring-service"
+
+  # T-V-10: Audit Service
+  audit-service:
+    build:
+      context: ./services/audit
+      dockerfile: Dockerfile
+    container_name: audit-service
+    ports:
+      - "8003:8003"
+    environment:
+      - DAPR_HTTP_PORT=3500
+      - DATABASE_URL=${DATABASE_URL}
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - todo-network
+
+  audit-service-dapr:
+    image: daprio/daprd:1.12.4
+    container_name: audit-dapr
+    command: [
+      "./daprd",
+      "-app-id", "audit-service",
+      "-app-port", "8003",
+      "-dapr-http-port", "3500",
+      "-dapr-grpc-port", "50001",
+      "-placement-host-address", "placement:50006",
+      "-resources-path", "/dapr/components",
+      "-log-level", "info"
+    ]
+    volumes:
+      - ./dapr/components:/dapr/components:ro
+      - ./dapr/secrets:/dapr/secrets:ro
+    depends_on:
+      - audit-service
+      - placement
+      - redpanda
+    network_mode: "service:audit-service"
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+volumes:
+  redpanda-data:
+    driver: local
+  redis-data:
+    driver: local
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  todo-network:
+    driver: bridge

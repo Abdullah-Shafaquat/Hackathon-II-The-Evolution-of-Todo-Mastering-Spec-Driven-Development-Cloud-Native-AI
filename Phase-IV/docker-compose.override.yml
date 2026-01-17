@@ -1,0 +1,22 @@
+# Docker Compose Override for Development
+# This file is automatically loaded with docker-compose.yml
+
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      # Mount source code for hot-reload (development only)
+      - ./backend/app:/app/app:ro
+    environment:
+      - DEBUG=1
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=development

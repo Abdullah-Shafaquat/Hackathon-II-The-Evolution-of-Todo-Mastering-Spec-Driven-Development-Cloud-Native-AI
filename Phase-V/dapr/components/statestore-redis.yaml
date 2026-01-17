@@ -1,0 +1,29 @@
+# T-V-06: Dapr State Store Component for Redis
+# From: speckit.plan - State Management
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: statestore
+  namespace: default
+spec:
+  type: state.redis
+  version: v1
+  metadata:
+    # Redis connection
+    - name: redisHost
+      value: "redis:6379"
+    - name: redisPassword
+      value: ""
+    # State configuration
+    - name: actorStateStore
+      value: "true"
+    # Key prefix for isolation
+    - name: keyPrefix
+      value: "name"
+    # TTL for state entries (optional)
+    - name: ttlInSeconds
+      value: "86400"  # 24 hours default
+scopes:
+  - backend
+  - notification-service
+  - recurring-service

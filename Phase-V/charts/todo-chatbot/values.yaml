@@ -1,0 +1,150 @@
+# Default values for todo-chatbot Helm chart
+# This file contains the default configuration values
+
+# Global settings
+global:
+  namespace: todo-app
+  environment: local
+
+# Backend configuration
+backend:
+  # Deployment settings
+  replicaCount: 2
+
+  image:
+    repository: todo-chatbot-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 8000
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+  # Health probes
+  livenessProbe:
+    path: /health
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+  readinessProbe:
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 5
+
+  # Horizontal Pod Autoscaler
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilization: 70
+    targetMemoryUtilization: 80
+
+  # Environment variables from ConfigMap
+  config:
+    HOST: "0.0.0.0"
+    PORT: "8000"
+    APP_NAME: "Phase IV Todo AI Assistant"
+    APP_VERSION: "4.0.0"
+    JWT_ALGORITHM: "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: "10080"
+    REFRESH_TOKEN_EXPIRE_MINUTES: "43200"
+    GEMINI_MODEL: "gemini-1.5-flash"
+    MAX_CONVERSATION_MESSAGES: "50"
+
+  # Secrets (override in production with actual values)
+  secrets:
+    DATABASE_URL: ""
+    BETTER_AUTH_SECRET: ""
+    JWT_SECRET_KEY: ""
+    GEMINI_API_KEY: ""
+
+# Frontend configuration
+frontend:
+  # Deployment settings
+  replicaCount: 2
+
+  image:
+    repository: todo-chatbot-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  service:
+    type: NodePort
+    port: 3000
+    nodePort: 30080
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "300m"
+      memory: "256Mi"
+
+  # Health probes
+  livenessProbe:
+    path: /
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+  readinessProbe:
+    path: /
+    initialDelaySeconds: 5
+    periodSeconds: 5
+
+  # Horizontal Pod Autoscaler
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilization: 70
+
+  # Environment variables
+  config:
+    NEXT_PUBLIC_API_URL: "http://backend-service:8000"
+    NODE_ENV: "production"
+    AUTH_TRUST_HOST: "true"
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: nginx
+  host: todo.local
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+  tls: []
+
+# Database migration job
+migration:
+  enabled: true
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 3
+
+# Monitoring settings
+monitoring:
+  enabled: false
+  prometheus:
+    enabled: false
+  grafana:
+    enabled: false
+
+# Security settings
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
